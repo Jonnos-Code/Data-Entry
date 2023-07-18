@@ -154,7 +154,6 @@ def MMImage(image):
 
     if not valid or not mvalid: raise Exception('Unable to read image- try taking a cleaner shot')
 
-    print('pre comp',comp)
     skip,p,mode,s = False,[],False,0
     for i in range(len(comp)):
         if skip:
@@ -179,12 +178,10 @@ def MMImage(image):
                 p.append(i)
         else:
             p.append(i)
-    print('pre upto',comp)
     f=0
     for i in p:
         del(comp[i-f])
         f += 1
-    print('post upto',comp)
     return mass,comp
 def EvalPercent(inp):
     return float(inp.strip('%'))/100.0
@@ -253,7 +250,7 @@ def BackupGlobal():
     NumRocks = values['nrocks']
     ClusterNote = values['notes']
     Signature = values['sig']
-    Server = values['reg']
+    Server = process.extractOne(values['reg'],regions)[0]
     Version = values['ver']
     Shard = values['shd']
     Location = ('' if not values['loc'] else process.extractOne(values['loc'],[item for sublist in list(locations.values()) for item in sublist])[0] if Grounded else process.extractOne(values['loc'],spaceloc)[0]) if event != 'Planet' and event !='Space' else ''
@@ -278,7 +275,6 @@ def EndSubmit():
     Applied = False
     rocks = []
 
-# NOTE: on submit, default to flat if in space
 RocksReported = 0
 Username = ''
 Grounded = True
@@ -331,7 +327,6 @@ while True:
 
     window = sg.Window("USG Data App",layout,element_justification='c')
     
-
     kb.add_hotkey(Keybind, partial(window.write_event_value,'SHOT','SHOT'))
     
     while True:
@@ -343,29 +338,45 @@ while True:
         SingleRock = values['srm']
 
         if event == sg.WIN_CLOSED: break
+
+
         elif event == 'Planet' or event == 'Space':
             if Grounded and event == 'Planet': continue
             elif not Grounded and event == 'Space': continue 
             else:
                 Grounded = not Grounded
+                break
+
+
         elif event == 'mmode' or event == 'vmode':
             ScanMode = True if event == 'vmode' else False
+
+
         elif event == 'Calculate':
             NumRocks = str(max(min(int(values['nrocks']),10),1))
             Signature = str(int(NumRocks)*Signatures[values['type']])
             Type = values['type']
             window['sig'].update(Signature)
+
+
         elif event == 'Apply':
             if not (values['area'] and values['loc'] and values['dis'] and values['deg'] and values['reg'] and values['ver'] and values['shd'] and values['sig']):
                 window['feedback'].update("Couldn't apply: Cluster data not filled out")
                 continue
+            succ = False
             for i,j in Signatures.items():
                 if int(values['sig']) % j == 0:
                     values['type'] = i
                     values['nrocks'] = int(values['sig']) // j
+                    succ = True
+            if not succ:
+                window['feedback'].update("Couldn't apply: Signature not correct")
+                continue
             BackupGlobal()
             Applied = True
             break
+
+
         elif event == 'Bind':
             rec = kb.record(until='Esc')
             temp = []
@@ -377,6 +388,8 @@ while True:
             window['keybind'].update(Keybind)
             kb.unhook_all_hotkeys()
             kb.add_hotkey(Keybind, partial(window.write_event_value,'SHOT','SHOT'))
+
+
         elif event == 'SHOT':
             if len(rocks) == int(NumRocks) or (len(rocks) == 1 and SingleRock):
                 window['feedback'].update("Couldn't get rock: Rocks data full")
@@ -409,6 +422,8 @@ while True:
             except Exception as e:
                 window['feedback'].update("Couldn't show data: "+str(e))
                 continue
+
+
         elif event[:5] == 'Reset':
             active = int(event[-1])-1
             if active < len(rocks):
@@ -417,6 +432,8 @@ while True:
                     UpdateRocks()
                 except Exception as e:
                     window['feedback'].update("Couldn't delete rock: "+str(e))
+
+
         elif event == 'Submit':
             if len(rocks) == int(NumRocks) or (len(rocks) == 1 and SingleRock):
 
@@ -432,20 +449,18 @@ while True:
                             "entry.816697130": planet,
                             "entry.185553886": values['sig'],
                             "entry.1049853798": str(i[0]), # mass
-                            "entry.577072814": values['type'], # deposit type
-                            # element stuff goes here - see the for loop after data is defined
-                            "entry.923538061": values['loc'] if Grounded else values['loc'],
+                            "entry.577072814": values['type'],
+                            "entry.923538061": values['loc'],
                             "entry.998639438": values['dis'] if Grounded else '0',
                             "entry.797873939": values['deg'] if Grounded else '0',
                             "entry.384703431": values['area'] if Grounded else 'Flat',
-                            # fracturing goes here - see the if statement after data is defined
                             "entry.144604195": values['notes'] + '///' + i[2] if values['notes'] and i[2] else i[2] if i[2] else values['notes'], # notes
                             "draftResponse": [],
                             "pageHistory": 0
                             }
                         for j in i[1][:-1]:
-                            data['entry.'+ElementNames[j[0]][2]] = j[1]
-                        if i[3]: data["entry.1506299456"] = 'TRUE'
+                            data['entry.'+ElementNames[j[0]][2]] = j[1] # element detection
+                        if i[3]: data["entry.1506299456"] = 'TRUE' # fracturing detection
                         print(data)
                         print(requests.post('https://docs.google.com/forms/d/e/1FAIpQLSdiVhyu3uHbpOvq8vaV7SA59nUh8jDONe-zQjW1qPyMf_81zg/formResponse',data=data))
                         sleep(.2)
